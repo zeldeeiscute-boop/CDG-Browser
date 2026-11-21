@@ -1,0 +1,59 @@
+name: Build CDG
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            label: windows
+          - os: macos-latest
+            label: macos
+          - os: ubuntu-latest
+            label: linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: python -m pip install PyQt6 PyQt6-WebEngine pyinstaller
+
+      - name: Build app
+        run: pyinstaller --noconfirm --windowed --name "CDG Browse" cdg_browse_v2-2.py
+
+      - name: Zip (Windows)
+        if: matrix.label == 'windows'
+        shell: pwsh
+        run: Compress-Archive -Path "dist/CDG Browse" -DestinationPath CDG-windows.zip
+
+      - name: Zip (macOS)
+        if: matrix.label == 'macos'
+        run: ditto -c -k --keepParent "dist/CDG Browse.app" CDG-macos.zip
+
+      - name: Zip (Linux)
+        if: matrix.label == 'linux'
+        run: cd dist && zip -r ../CDG-linux.zip "CDG Browse"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CDG-${{ matrix.label }}
+          path: CDG-${{ matrix.label }}.zip
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: CDG-${{ matrix.label }}.zip
